@@ -46,6 +46,13 @@ var playing = false;
 
 var holistic_result = new MediapipeHolisticResult(scene, message_div);
 
+// メニューからファイルを開くと、eventがとんでくる。
+// eventを受け取ったらinvokeでファイルを開く。
+const unlisten_open_menu = listen("open_menu", event => {
+    console.log("open_menu called.");
+    invoke("open_file").then();
+}).then();
+
 // eventで送信されてきた文字列をjsonにする。
 // jsonをパースして表示する。
 const unlisten_open_file = listen("open_file", event => {

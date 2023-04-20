@@ -46,7 +46,9 @@ async fn receive_udp(
 }
 
 #[tauri::command]
-async fn start_receive(app_handle: tauri::AppHandle, window: tauri::Window) {
+async fn start_receive(
+  app_handle: tauri::AppHandle, window: tauri::Window
+) {
   println!("receiver: called");
   match UdpSocket::bind("0.0.0.0:38013").await{
     Ok(sock) => {
@@ -88,6 +90,19 @@ async fn start_receive(app_handle: tauri::AppHandle, window: tauri::Window) {
   }
 }
 
+// TODO: recordを開始するコマンドを作る。
+// receiveとrecordは排他的に動くようにし、
+// 保存するファイル名はあらかじめ指定しておく。
+#[tauri::command]
+async fn start_record(
+  app_handle: tauri::AppHandle, window: tauri::Window
+) {
+}
+
+
+// 中身が空なのは、eventがバックエンド内部では送受信できない。
+// なので、フロントエンドからeventを送信して、
+// udp_stopを呼び出す。
 #[tauri::command]
 async fn end_receive() {
 
@@ -100,11 +115,55 @@ async fn end_receive() {
 // 小さいファイルであれば一度メモリにためてしまう。
 // 大きいファイルであれば、
 // 開きっぱなしにして任意の行を送信できるようにする。
+#[tauri::command]
+async fn open_file(
+  app_handle: tauri::AppHandle, window: tauri::Window
+) {
+  println!("open_file invoked");
+  let file_path = FileDialogBuilder::new().pick_file();
+  match file_path {
+    Some(path) => {
+      let mut file = match File::open(&path) {
+        Err(why) => panic!("{}", why),
+        Ok(file) => file,
+      };
+
+      let mut filetext = String::new();
+      match file.read_to_string(&mut filetext) {
+        Err(why) => panic!("{}", why),
+        Ok(_) => (),
+      };
+      window.emit("open_file", Payload {
+        filetext: filetext
+      });
+    }
+    _ => {}
+  }
+}
 
 // ファイルを保存する場合は、
 // メニューからダイアログを開き、
 // ファイル名を指定してeventでフロントエンドに送信、
 // フロントエンドからはinvokeで保存コマンドを呼び出す。
+#[tauri::command]
+async fn save_file(
+  app_handle: tauri::AppHandle, window: tauri::Window
+) {
+  let file_path = FileDialogBuilder::new().pick_file();
+  match file_path {
+    Some(path) => {
+      match path.to_str() {
+        Some(s) => {
+          window.emit("save_file", Payload {
+            filetext: s.to_string()
+          });
+        }
+        _ => {}
+      }
+    }
+    _ => {}
+  }
+}
 
 
 fn main() {
@@ -119,51 +178,28 @@ fn main() {
   let menu = Menu::new().add_submenu(submenu);
 
   tauri::Builder::default()
-    .invoke_handler(tauri::generate_handler![start_receive, end_receive])
+    .invoke_handler(
+      tauri::generate_handler![
+        start_receive, end_receive, open_file, save_file
+      ]
+    )
     // .menu(tauri::Menu::os_default(&context.package_info().name))
     .menu(menu)
     .on_menu_event(|event| {
       match event.menu_item_id() {
         "open" => {
           println!("open menu called");
-          let file_path = FileDialogBuilder::new().pick_file();
-          match file_path {
-            Some(path) => {
-              let mut file = match File::open(&path) {
-                Err(why) => panic!("{}", why),
-                Ok(file) => file,
-              };
-
-              let mut filetext = String::new();
-              match file.read_to_string(&mut filetext) {
-                Err(why) => panic!("{}", why),
-                Ok(_) => (),
-              };
-              let window = event.window();
-              window.emit("open_file", Payload {
-                filetext: filetext
-              });
-            }
-            _ => {}
-          }
+          let window = event.window();
+          window.emit("open_menu", Payload {
+            filetext: "".to_string()
+          });
         }
         "save" => {
           println!("save menu called");
-          let file_path = FileDialogBuilder::new().save_file();
-          match file_path {
-            Some(path) => {
-              match path.to_str() {
-                Some(s) => {
-                  let window = event.window();
-                  window.emit("save_file", Payload {
-                    filetext: s.to_string()
-                  });
-                }
-                _ => {}
-              }
-            }
-            _ => {}
-          }
+          let window = event.window();
+          window.emit("save_menu", Payload {
+            filetext: "".to_string()
+          });
         }
         _ => {}
       }
