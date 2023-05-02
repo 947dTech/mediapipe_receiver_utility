@@ -4,8 +4,16 @@
 )]
 
 use std::fs::File;
+use std::io::{
+  self, BufRead, BufReader, Write
+};
+use std::time::{
+  Duration, Instant
+};
 use std::io::prelude::*;
 use std::path::Path;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use tokio::net::UdpSocket;
 use tokio_util::udp::UdpFramed;
@@ -17,11 +25,46 @@ use futures_util::StreamExt;
 use tauri::{CustomMenuItem, Menu, MenuItem, Submenu,
   WindowEvent,
   Manager,
+  State,
   // api::dialog::FileDialogBuilder,
   api::dialog::blocking::FileDialogBuilder,
 };
 
+// 複数行にわたるJSONを格納するための構造体
+struct TrackingFrame {
+  json_str: String,
+  timestamp: u64,
+}
 
+impl TrackingFrame {
+  fn new(json_str: String) -> Self {
+    Self {
+      json_str: json_str,
+      timestamp: 0,
+    }
+  }
+
+  // JSONからpose_landmarks_stampを取り出してtimestampに追加する
+  fn extract_timestamp(&mut self) {
+    let v: serde_json::Value = serde_json::from_str(&self.json_str).unwrap();
+    let timestamp = v["pose_landmarks_stamp"].as_u64().unwrap();
+    self.timestamp = timestamp;
+  }
+}
+
+// TrackingFrameのVecを格納するための構造体
+#[derive(Default)]
+struct TrackingFrames(Mutex<Vec<TrackingFrame>>);
+
+// カウンタ
+#[derive(Default)]
+struct Counter(Arc<Mutex<usize>>);
+
+// 現在スレッドが実行されているかどうか
+#[derive(Default)]
+struct RunningStatus(Arc<Mutex<bool>>);
+
+// event用のPayload
 #[derive(Clone, serde::Serialize)]
 struct Payload {
   filetext: String,
@@ -108,6 +151,143 @@ async fn end_receive() {
 
 }
 
+
+// UDPと同様にjson文字列をemitする無限ループを作成する。
+async fn send_json(
+  app_handle: &tauri::AppHandle,
+  window: &tauri::Window,
+  tracking_frames: &State<'_, TrackingFrames>,
+  counter: &State<'_, Counter>
+) {
+  let tf_buf = tracking_frames.0.lock().await;
+  let idx = *counter.0.lock().await;
+  if idx >= tf_buf.len() {
+    println!("  send_json: idx is out of range.");
+  } else {
+    let mut t0: u64 = tf_buf[idx].timestamp;
+    // for tf in tf_buf.iter() {
+    for i in idx..tf_buf.len() {
+      let tf = &tf_buf[i];
+      let t1: u64 = tf.timestamp;
+      if t1 < t0 {
+        println!("  send_json: time diff is negative.");
+        t0 = t1;
+      } else {
+        let td = t1 - t0;
+        t0 = t1;
+        tokio::time::sleep(Duration::from_micros(td)).await;
+        println!("  send_json: in the loop, waited {} microsec.", td);
+        let duration0 = Instant::now();
+        window.emit("json_send", Payload {
+          filetext: tf.json_str.clone()
+        });
+        let duration1 = Instant::now();
+        let duration = duration1 - duration0;
+        println!("  send_json: emit duration: {} microsec.", duration.as_micros());
+        t0 += duration.as_micros() as u64;
+      }
+      // *counter.0.lock().await += 1;
+      *counter.0.lock().await = i + 1;  // 他のスレッドから書き換えられる可能性を考えるとi+1
+      println!("  send_json: counter: {}", *counter.0.lock().await);
+    }
+    println!("  send_json: loop end.");
+  }
+}
+
+// 再生スレッドを実行する。
+#[tauri::command]
+async fn start_json(
+  counter_reset: bool,
+  app_handle: tauri::AppHandle,
+  window: tauri::Window,
+  tracking_frames: State<'_, TrackingFrames>,
+  counter: State<'_, Counter>,
+  running: State<'_, RunningStatus>
+) -> Result<(), ()> {
+  println!("start_json: called");
+  if *running.0.lock().await {
+    println!("start_json: already running.");
+    return Err(());
+  }
+  *running.0.lock().await = true;
+
+  // counterを初期化
+  if counter_reset {
+    *counter.0.lock().await = 0;
+  }
+
+  // UDPと同様に、unbounded_channelを使って送信スレッドを作成。
+  let (send, mut recv) = unbounded_channel();
+
+  let stop_id = app_handle.listen_global("json_stop", move |event| {
+    println!("receiver: stop");
+    send.send(());
+  });
+
+  tokio::select! {
+    _ = send_json(&app_handle, &window, &tracking_frames, &counter) => {},
+    _ = recv.recv() => {},
+  }
+  println!("open_file: end");
+  println!("open_file: counter: {}", *counter.0.lock().await);
+
+  app_handle.unlisten(stop_id);  // recv.recv()が終わってからunlisten
+
+  *running.0.lock().await = false;
+  println!("start_json: end");
+
+  Ok(())
+}
+
+// ステップ実行を行う。
+#[tauri::command]
+async fn step_json(
+  counter_reset: bool,
+  increment: bool,
+  app_handle: tauri::AppHandle,
+  window: tauri::Window,
+  tracking_frames: State<'_, TrackingFrames>,
+  counter: State<'_, Counter>,
+  running: State<'_, RunningStatus>
+) -> Result<(), ()> {
+  println!("step_json: called");
+  if *running.0.lock().await {
+    println!("step_json: already running.");
+    return Err(());
+  }
+  *running.0.lock().await = true;
+
+  let tf_buf = tracking_frames.0.lock().await;
+  let buf_length = tf_buf.len();
+
+  if buf_length > 1 {
+    let cnt = *counter.0.lock().await;
+    // cntには次のフレームのインデックスが入っている。
+    // incrementがtrueなら、cntをそのまま使う。
+    // incrementがfalseなら、cntを2減らす。
+    let mut idx : usize;
+    if increment {
+      idx = cnt % buf_length;
+      *counter.0.lock().await =
+        (cnt + 1) % buf_length;
+    } else {
+      idx = (buf_length + cnt - 2) % buf_length;
+      *counter.0.lock().await =
+        (buf_length + cnt - 1) % buf_length;
+    }
+    let tf = &tf_buf[idx];
+    window.emit("json_send", Payload {
+      filetext: tf.json_str.clone()
+    });
+  }
+
+  *running.0.lock().await = false;
+  println!("step_json: end");
+
+  Ok(())
+}
+
+
 // メニューからファイルダイアログを開き、
 // 指定されたファイルをテキストで開いて、一行ずつ読み込む。
 // 読み込んだ内容をフロントエンドにeventで送る。
@@ -117,8 +297,12 @@ async fn end_receive() {
 // 開きっぱなしにして任意の行を送信できるようにする。
 #[tauri::command]
 async fn open_file(
-  app_handle: tauri::AppHandle, window: tauri::Window
-) {
+  app_handle: tauri::AppHandle,
+  window: tauri::Window,
+  tracking_frames: State<'_, TrackingFrames>,
+  counter: State<'_, Counter>,
+  running: State<'_, RunningStatus>
+)  -> Result<(), ()>  {
   println!("open_file invoked");
   let file_path = FileDialogBuilder::new().pick_file();
   match file_path {
@@ -128,17 +312,28 @@ async fn open_file(
         Ok(file) => file,
       };
 
-      let mut filetext = String::new();
-      match file.read_to_string(&mut filetext) {
-        Err(why) => panic!("{}", why),
-        Ok(_) => (),
-      };
-      window.emit("open_file", Payload {
-        filetext: filetext
-      });
+      // ファイルの中身を一行ずつ読み込んでTrackingFrameを作成し、
+      // TrackingFramesに格納する。
+      for line in BufReader::new(file).lines() {
+        match line {
+          Ok(s) => {
+            let mut tf = TrackingFrame::new(s);
+            tf.extract_timestamp();
+            println!("stamp: {}", tf.timestamp);
+            tracking_frames.0.lock().await.push(tf);
+          }
+          _ => {}
+        }
+      }
+
     }
     _ => {}
   }
+
+  // counterを初期化
+  *counter.0.lock().await = 0;
+
+  Ok(())
 }
 
 // ファイルを保存する場合は、
@@ -178,9 +373,17 @@ fn main() {
   let menu = Menu::new().add_submenu(submenu);
 
   tauri::Builder::default()
+    .manage(TrackingFrames(Default::default()))
+    .manage(Counter(Default::default()))
+    .manage(RunningStatus(Default::default()))
     .invoke_handler(
       tauri::generate_handler![
-        start_receive, end_receive, open_file, save_file
+        start_receive,
+        end_receive,
+        open_file,
+        save_file,
+        start_json,
+        step_json
       ]
     )
     // .menu(tauri::Menu::os_default(&context.package_info().name))
