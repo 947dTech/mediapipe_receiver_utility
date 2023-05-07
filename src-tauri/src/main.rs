@@ -214,6 +214,7 @@ async fn end_receive() {
 async fn send_json(
   app_handle: &tauri::AppHandle,
   window: &tauri::Window,
+  sock: UdpSocket,
   tracking_frames: &State<'_, TrackingFrames>,
   counter: &State<'_, Counter>
 ) {
@@ -235,10 +236,15 @@ async fn send_json(
         t0 = t1;
         tokio::time::sleep(Duration::from_micros(td)).await;
         println!("  send_json: in the loop, waited {} microsec.", td);
+        // 送信前のタイムスタンプを保持する
         let duration0 = Instant::now();
+        // フロントエンドに送信
         window.emit("json_send", Payload {
           filetext: tf.json_str.clone()
         });
+        // UDPで送信
+        sock.send(tf.json_str.clone().as_bytes()).await;
+        // 送信にかかった時間を補償する
         let duration1 = Instant::now();
         let duration = duration1 - duration0;
         println!("  send_json: emit duration: {} microsec.", duration.as_micros());
@@ -256,6 +262,7 @@ async fn send_json(
 #[tauri::command]
 async fn start_json(
   counter_reset: bool,
+  ipaddr: String,
   app_handle: tauri::AppHandle,
   window: tauri::Window,
   tracking_frames: State<'_, TrackingFrames>,
@@ -274,22 +281,34 @@ async fn start_json(
     *counter.0.lock().await = 0;
   }
 
-  // UDPと同様に、unbounded_channelを使って送信スレッドを作成。
-  let (send, mut recv) = unbounded_channel();
+  // bindでは0.0.0.0を指定しておく。
+  match UdpSocket::bind("0.0.0.0:0").await{
+    Ok(sock) => {
+      // 送信だけが必要なのでconnectで送信先を指定する。
+      sock.connect(format!("{}:38013", ipaddr)).await;
 
-  let stop_id = app_handle.listen_global("json_stop", move |event| {
-    println!("receiver: stop");
-    send.send(());
-  });
+      // UDPと同様に、unbounded_channelを使って送信スレッドを作成。
+      let (send, mut recv) = unbounded_channel();
 
-  tokio::select! {
-    _ = send_json(&app_handle, &window, &tracking_frames, &counter) => {},
-    _ = recv.recv() => {},
+      let stop_id = app_handle.listen_global("json_stop", move |event| {
+        println!("receiver: stop");
+        send.send(());
+      });
+
+      tokio::select! {
+        _ = send_json(
+          &app_handle, &window, sock, &tracking_frames, &counter) => {},
+        _ = recv.recv() => {},
+      }
+      println!("open_file: end");
+      println!("open_file: counter: {}", *counter.0.lock().await);
+
+      app_handle.unlisten(stop_id);  // recv.recv()が終わってからunlisten
+    },
+    Err(err) => {
+      println!("start_json: binding failed.");
+    }
   }
-  println!("open_file: end");
-  println!("open_file: counter: {}", *counter.0.lock().await);
-
-  app_handle.unlisten(stop_id);  // recv.recv()が終わってからunlisten
 
   *running.0.lock().await = false;
   println!("start_json: end");
