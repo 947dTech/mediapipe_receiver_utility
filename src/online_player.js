@@ -9,6 +9,7 @@ import {appWindow} from "@tauri-apps/api/window";
 import {MediapipeHolisticResult} from "./viewer";
 
 const play_button = document.getElementById("play_anim");
+const record_button = document.getElementById("record_anim");
 const stop_button = document.getElementById("stop_anim");
 const message_div = document.getElementById("message_div");
 
@@ -63,7 +64,16 @@ stop_button.addEventListener("click", (event) => {
     emit("udp_stop", {}).then();
 });
 
-// TODO: 受け取ったパケットをファイルに書き込む部分を追加
+// 受け取ったパケットをファイルに書き込む
+record_button.addEventListener("click", (event) => {
+    if (!playing) {
+        playing = true;
+        needs_update = true;
+        invoke("start_record").then(
+            () => {}
+        );
+    }
+});
 
 var prev_time = 0
 var current_time = 0

@@ -11,13 +11,16 @@ use std::time::{
   Duration, Instant
 };
 use std::io::prelude::*;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use tokio::fs::File as AsyncFile;
+use tokio::io::{self as async_io, AsyncWriteExt};
 use tokio::net::UdpSocket;
 use tokio_util::udp::UdpFramed;
-use tokio_util::codec::LinesCodec;
+use tokio_util::codec::{LinesCodec, Decoder};
 use tokio::sync::mpsc::unbounded_channel;
 // use futures::prelude::*;  // split()はこれを使わないと成功しない
 use futures_util::StreamExt;
@@ -133,13 +136,68 @@ async fn start_receive(
   }
 }
 
-// TODO: recordを開始するコマンドを作る。
-// receiveとrecordは排他的に動くようにし、
-// 保存するファイル名はあらかじめ指定しておく。
+// 受け取ったUDPパケットをファイルに保存しながら送信する。
+async fn record_udp(
+  app_handle: &tauri::AppHandle,
+  window: &tauri::Window,
+  mut framed: UdpFramed<LinesCodec>,
+  path: &PathBuf
+) {
+  match AsyncFile::create(&path).await {
+    Err(why) => panic!("{}", why),
+    Ok(mut file) => {
+      // NOTE: for_eachを使うとfileを渡せなくなるのでwhileにしている
+      while let Some(msg) = framed.next().await {
+        let (msg_str, _addr) = msg.unwrap();
+        window.emit("udp_receive", Payload {
+          filetext: msg_str.clone()
+        });
+        // msg_strの最後に改行を追加して書き込む
+        let msg_str_ln = format!("{}\n", msg_str);
+        file.write_all(msg_str_ln.as_bytes()).await.unwrap();
+      }
+    }
+  }
+}
+
 #[tauri::command]
 async fn start_record(
   app_handle: tauri::AppHandle, window: tauri::Window
 ) {
+  println!("recorder: called");
+  // まずダイアログを開いてファイルを指定する。
+  let file_path = FileDialogBuilder::new().save_file();
+  match file_path {
+    Some(path) => {
+      // UDP待ち受け開始
+      match UdpSocket::bind("0.0.0.0:38013").await{
+        Ok(sock) => {
+          println!("recorder: start");
+          let framed = UdpFramed::new(sock, LinesCodec::new());
+
+          let (send, mut recv) = unbounded_channel();
+
+          let stop_id = app_handle.listen_global("udp_stop", move |event| {
+            println!("recorder: stop");
+            send.send(());
+          });
+
+          tokio::select! {
+            _ = record_udp(&app_handle, &window, framed, &path) => {},
+            _ = recv.recv() => {},
+          }
+
+          app_handle.unlisten(stop_id);  // recv.recv()が終わってからunlisten
+        },
+        Err(err) => {
+          println!("recorder: already running?");
+        }
+      }
+    }
+    _ => {
+      println!("recorder: invalid file path?");
+    }
+  }
 }
 
 
@@ -379,6 +437,7 @@ fn main() {
     .invoke_handler(
       tauri::generate_handler![
         start_receive,
+        start_record,
         end_receive,
         open_file,
         save_file,
