@@ -21,6 +21,9 @@
               align-items: center;
               justify-content: center;
             } */
+            #frame_slider {
+              width: 100%;
+            }
           </style>
     </head>
     <body>
@@ -35,8 +38,12 @@
         <button id="pause_anim">Pause</button>
         <button id="stop_anim">Stop</button>
         <br />
+        <input type="range" id="frame_slider" name="frame_slider"
+          min="0" max="0" value="0" step="1">
+        <br />
         <button id="prev_frame">Prev</button>
         <button id="next_frame">Next</button>
+        <div id="frames_div"></div>
         <div id="message_div"></div>
         <script src="offline_player.bundle.js"></script>
     </body>
