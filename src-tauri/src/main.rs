@@ -71,6 +71,17 @@ struct RunningStatus(Arc<Mutex<bool>>);
 #[derive(Clone, serde::Serialize)]
 struct Payload {
   filetext: String,
+  current_frame: usize,
+  current_stamp: u64
+}
+
+// 読み込んだファイルの概要を通知するためのPayload
+#[derive(Clone, serde::Serialize)]
+struct FrameNotifyPayload {
+  current_frame: usize,
+  total_frames: usize,
+  begin_timestamp: u64,
+  end_timestamp: u64
 }
 
 // UDPソケットでの待ち受け、明示的にinvokeで開始。
@@ -86,7 +97,9 @@ async fn receive_udp(
     // println!("receiver: received.");
     let (msg_str, _addr) = msg.unwrap();
     window.emit("udp_receive", Payload {
-      filetext: msg_str
+      filetext: msg_str,
+      current_frame: 0,
+      current_stamp: 0
     });
   }).await;
 }
@@ -150,7 +163,9 @@ async fn record_udp(
       while let Some(msg) = framed.next().await {
         let (msg_str, _addr) = msg.unwrap();
         window.emit("udp_receive", Payload {
-          filetext: msg_str.clone()
+          filetext: msg_str.clone(),
+          current_frame: 0,
+          current_stamp: 0
         });
         // msg_strの最後に改行を追加して書き込む
         let msg_str_ln = format!("{}\n", msg_str);
@@ -240,7 +255,9 @@ async fn send_json(
         let duration0 = Instant::now();
         // フロントエンドに送信
         window.emit("json_send", Payload {
-          filetext: tf.json_str.clone()
+          filetext: tf.json_str.clone(),
+          current_frame: i,
+          current_stamp: tf.timestamp
         });
         // UDPで送信
         sock.send(tf.json_str.clone().as_bytes()).await;
@@ -354,12 +371,52 @@ async fn step_json(
     }
     let tf = &tf_buf[idx];
     window.emit("json_send", Payload {
-      filetext: tf.json_str.clone()
+      filetext: tf.json_str.clone(),
+      current_frame: idx,
+      current_stamp: tf.timestamp
     });
   }
 
   *running.0.lock().await = false;
   println!("step_json: end");
+
+  Ok(())
+}
+
+// counterを任意の位置に設定する。
+#[tauri::command]
+async fn set_counter(
+  idx: usize,
+  app_handle: tauri::AppHandle,
+  window: tauri::Window,
+  tracking_frames: State<'_, TrackingFrames>,
+  counter: State<'_, Counter>,
+  running: State<'_, RunningStatus>
+) -> Result<(), ()> {
+  println!("set_counter: called");
+  if *running.0.lock().await {
+    println!("set_counter: already running.");
+    return Err(());
+  }
+  *running.0.lock().await = true;
+
+  let tf_buf = tracking_frames.0.lock().await;
+  let buf_length = tf_buf.len();
+
+  if idx < buf_length {
+    // cntには次のフレームのインデックスが入る。
+    *counter.0.lock().await =
+    (idx + 1) % buf_length;
+    let tf = &tf_buf[idx];
+    window.emit("json_send", Payload {
+      filetext: tf.json_str.clone(),
+      current_frame: idx,
+      current_stamp: tf.timestamp
+    });
+  }
+
+  *running.0.lock().await = false;
+  println!("set_counter: end");
 
   Ok(())
 }
@@ -403,6 +460,16 @@ async fn open_file(
         }
       }
 
+      // フロントエンドに読み込んだファイルの行数を送信する。
+      let tf_buf = tracking_frames.0.lock().await;
+      let total_frames = tf_buf.len();
+      window.emit("total_frames", FrameNotifyPayload {
+        current_frame: 0,
+        total_frames: total_frames,
+        begin_timestamp: tf_buf[0].timestamp,
+        end_timestamp: tf_buf[total_frames - 1].timestamp
+      });
+
     }
     _ => {}
   }
@@ -427,7 +494,9 @@ async fn save_file(
       match path.to_str() {
         Some(s) => {
           window.emit("save_file", Payload {
-            filetext: s.to_string()
+            filetext: s.to_string(),
+            current_frame: 0,
+            current_stamp: 0
           });
         }
         _ => {}
@@ -461,7 +530,8 @@ fn main() {
         open_file,
         save_file,
         start_json,
-        step_json
+        step_json,
+        set_counter
       ]
     )
     // .menu(tauri::Menu::os_default(&context.package_info().name))
@@ -472,14 +542,18 @@ fn main() {
           println!("open menu called");
           let window = event.window();
           window.emit("open_menu", Payload {
-            filetext: "".to_string()
+            filetext: "".to_string(),
+            current_frame: 0,
+            current_stamp: 0
           });
         }
         "save" => {
           println!("save menu called");
           let window = event.window();
           window.emit("save_menu", Payload {
-            filetext: "".to_string()
+            filetext: "".to_string(),
+            current_frame: 0,
+            current_stamp: 0
           });
         }
         _ => {}
