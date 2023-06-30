@@ -238,19 +238,34 @@ async fn send_json(
   if idx >= tf_buf.len() {
     println!("  send_json: idx is out of range.");
   } else {
+    // 長時間のデータの場合、誤差が累積しないように
+    // 送信開始時のタイムスタンプと現在のタイムスタンプの差分が
+    // 送信開始時の時刻と現在の時刻の差分と同じになるようにする。
+    let timeline_origin: u64 = tf_buf[idx].timestamp;
+    let stream_origin = Instant::now();
+    // 前回送信直後の時刻を保持する。
+    let mut timestamp_prev = stream_origin;
+
     let mut t0: u64 = tf_buf[idx].timestamp;
     // for tf in tf_buf.iter() {
     for i in idx..tf_buf.len() {
       let tf = &tf_buf[i];
       let t1: u64 = tf.timestamp;
       if t1 < t0 {
+        // この場合タイムラインが壊れているので送信しない。
         println!("  send_json: time diff is negative.");
         t0 = t1;
       } else {
-        let td = t1 - t0;
         t0 = t1;
-        tokio::time::sleep(Duration::from_micros(td)).await;
-        println!("  send_json: in the loop, waited {} microsec.", td);
+        // タイムスタンプにおける現在フレームと始点との差分(1)
+        let td_from_origin = t1 - timeline_origin;
+        // 前回送信時刻と最初に送信した時刻の差分(2)
+        let duration_from_origin = timestamp_prev - stream_origin;
+        // 待機時間は(1)-(2)
+        let td_from_prev =
+          td_from_origin - (duration_from_origin.as_micros() as u64);
+        tokio::time::sleep(Duration::from_micros(td_from_prev)).await;
+        println!("  send_json: in the loop, waited {} microsec.", td_from_prev);
         // 送信前のタイムスタンプを保持する
         let duration0 = Instant::now();
         // フロントエンドに送信
@@ -261,11 +276,12 @@ async fn send_json(
         });
         // UDPで送信
         sock.send(tf.json_str.clone().as_bytes()).await;
-        // 送信にかかった時間を補償する
+        // 送信にかかった時間を計算
         let duration1 = Instant::now();
         let duration = duration1 - duration0;
         println!("  send_json: emit duration: {} microsec.", duration.as_micros());
-        t0 += duration.as_micros() as u64;
+        // 今回送信終了した時刻を前回送信時刻として保持する。
+        timestamp_prev = duration1;
       }
       // *counter.0.lock().await += 1;
       *counter.0.lock().await = i + 1;  // 他のスレッドから書き換えられる可能性を考えるとi+1
