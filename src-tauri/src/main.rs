@@ -280,8 +280,8 @@ async fn send_json(
         let duration1 = Instant::now();
         let duration = duration1 - duration0;
         println!("  send_json: emit duration: {} microsec.", duration.as_micros());
-        // 今回送信終了した時刻を前回送信時刻として保持する。
-        timestamp_prev = duration1;
+        // 送信にかかった時間は加算せず、今回送信を開始した時刻を保存しておく。
+        timestamp_prev = duration0;
       }
       // *counter.0.lock().await += 1;
       *counter.0.lock().await = i + 1;  // 他のスレッドから書き換えられる可能性を考えるとi+1
