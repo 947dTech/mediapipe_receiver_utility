@@ -1,6 +1,7 @@
-import {invoke} from "@tauri-apps/api/tauri";
+import {invoke} from "@tauri-apps/api/core";
 import {listen, emit} from "@tauri-apps/api/event";
-import {appWindow} from "@tauri-apps/api/window";
+import {getCurrentWebviewWindow} from "@tauri-apps/api/webviewWindow";
+const appWindow = getCurrentWebviewWindow()
 
 const message_div = document.getElementById("message_div");
 // const textfield = document.getElementById("textfield");
