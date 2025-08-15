@@ -576,7 +576,7 @@ pub fn run() {
             let m_save = MenuItemBuilder::with_id("save", "Save").build(app)?;
             let submenu = SubmenuBuilder::new(app, "File").items(&[&m_open, &m_save]).build()?;
             let menu = MenuBuilder::new(app).item(&submenu).build()?;
-
+            app.set_menu(menu);
             app.on_menu_event(|app, event| match event.id().as_ref() {
                 "open" => {
                     println!("open menu called");
