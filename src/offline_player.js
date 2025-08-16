@@ -109,7 +109,7 @@ play_button.addEventListener("click", (event) => {
         playing = true;
         invoke("start_json", {
             counterReset: counter_reset,
-            ipaddr: "127.0.0.1"
+            ipaddr: document.getElementById("ipaddr").value
         }).then();
     }
 });
