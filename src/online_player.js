@@ -2,11 +2,12 @@ import * as THREE from "three";
 import { OrbitControls } from "@three-ts/orbit-controls";
 import { AmbientLight, HemisphereLight } from "three";
 
-import {invoke} from "@tauri-apps/api/tauri";
+import {invoke} from "@tauri-apps/api/core";
 import {listen, emit} from "@tauri-apps/api/event";
-import {appWindow} from "@tauri-apps/api/window";
+import {getCurrentWebviewWindow} from "@tauri-apps/api/webviewWindow";
 
 import {MediapipeHolisticResult} from "./viewer";
+const appWindow = getCurrentWebviewWindow()
 
 const play_button = document.getElementById("play_anim");
 const record_button = document.getElementById("record_anim");
