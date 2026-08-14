@@ -627,25 +627,116 @@ export function MediapipeHolisticResult(scene, message_div=null) {
                 clear_line_object(this.right_eyebrow_1_lines);
             }
 
-
-            if ("right_hand_landmarks" in msg) {
-                let msg_right_hand_landmarks = msg["right_hand_landmarks"];
-                let right_hand_root =
-                    landmark_to_vector3(
-                        msg_right_hand_landmarks[0], aspect_ratio);
-
+            // hand_world -> なければ hand -> それもなければ消去とする
+            if ("right_hand_world_landmarks" in msg || "right_hand_landmarks" in msg) {
+                // 初期化に必要な共通項目
                 let right_hand_thumb_points = [];
                 let right_hand_thumb_indices = [
                     0, 1, 2, 3, 4
                 ];
-                for (const i of right_hand_thumb_indices) {
-                    right_hand_thumb_points.push(
+                let right_hand_index_points = [];
+                let right_hand_index_indices = [
+                    0, 5, 6, 7, 8
+                ];
+                let right_hand_middle_points = [];
+                let right_hand_middle_indices = [
+                    0, 9, 10, 11, 12
+                ];
+                let right_hand_ring_points = [];
+                let right_hand_ring_indices = [
+                    0, 13, 14, 15, 16
+                ];
+                let right_hand_pinky_points = [];
+                let right_hand_pinky_indices = [
+                    0, 17, 18, 19, 20
+                ];
+
+                // どちらが存在するかで内容を変更する
+                if ("right_hand_world_landmarks" in msg) {
+                    let msg_right_hand_world_landmarks = msg["right_hand_world_landmarks"];
+
+                    for (const i of right_hand_thumb_indices) {
+                        right_hand_thumb_points.push(
+                            world_landmark_to_vector3(
+                                msg_right_hand_world_landmarks[i]));
+                    }
+
+                    for (const i of right_hand_index_indices) {
+                        right_hand_index_points.push(
+                            world_landmark_to_vector3(
+                                msg_right_hand_world_landmarks[i]));
+                    }
+
+                    for (const i of right_hand_middle_indices) {
+                        right_hand_middle_points.push(
+                            world_landmark_to_vector3(
+                                msg_right_hand_world_landmarks[i]));
+                    }
+
+                    for (const i of right_hand_ring_indices) {
+                        right_hand_ring_points.push(
+                            world_landmark_to_vector3(
+                                msg_right_hand_world_landmarks[i]));
+                    }
+
+                    for (const i of right_hand_pinky_indices) {
+                        right_hand_pinky_points.push(
+                            world_landmark_to_vector3(
+                                msg_right_hand_world_landmarks[i]));
+                    }
+                } else if ("right_hand_landmarks" in msg) {
+                    let msg_right_hand_landmarks = msg["right_hand_landmarks"];
+                    let right_hand_root =
                         landmark_to_vector3(
-                            msg_right_hand_landmarks[i], aspect_ratio)
-                        .sub(right_hand_root)
-                        .multiplyScalar(2.0)
-                        .add(pose_world_right_hand));
+                            msg_right_hand_landmarks[0], aspect_ratio);
+
+                    for (const i of right_hand_thumb_indices) {
+                        right_hand_thumb_points.push(
+                            landmark_to_vector3(
+                                msg_right_hand_landmarks[i], aspect_ratio)
+                            .sub(right_hand_root)
+                            .multiplyScalar(2.0)
+                            .add(pose_world_right_hand));
+                    }
+
+                    for (const i of right_hand_index_indices) {
+                        right_hand_index_points.push(
+                            landmark_to_vector3(
+                                msg_right_hand_landmarks[i], aspect_ratio)
+                            .sub(right_hand_root)
+                            .multiplyScalar(2.0)
+                            .add(pose_world_right_hand));
+                    }
+
+                    for (const i of right_hand_middle_indices) {
+                        right_hand_middle_points.push(
+                            landmark_to_vector3(
+                                msg_right_hand_landmarks[i], aspect_ratio)
+                            .sub(right_hand_root)
+                            .multiplyScalar(2.0)
+                            .add(pose_world_right_hand));
+                    }
+
+                    for (const i of right_hand_ring_indices) {
+                        right_hand_ring_points.push(
+                            landmark_to_vector3(
+                                msg_right_hand_landmarks[i], aspect_ratio)
+                            .sub(right_hand_root)
+                            .multiplyScalar(2.0)
+                            .add(pose_world_right_hand));
+                    }
+
+                    for (const i of right_hand_pinky_indices) {
+                        right_hand_pinky_points.push(
+                            landmark_to_vector3(
+                                msg_right_hand_landmarks[i], aspect_ratio)
+                            .sub(right_hand_root)
+                            .multiplyScalar(2.0)
+                            .add(pose_world_right_hand));
+                    }
                 }
+
+                // 描画
                 if (this.right_hand_thumb_lines === null) {
                     this.right_hand_thumb_lines =
                         create_line_object_from_points(
@@ -655,18 +746,6 @@ export function MediapipeHolisticResult(scene, message_div=null) {
                     update_line_object_from_points(this.right_hand_thumb_lines, right_hand_thumb_points);
                 }
 
-                let right_hand_index_points = [];
-                let right_hand_index_indices = [
-                    0, 5, 6, 7, 8
-                ];
-                for (const i of right_hand_index_indices) {
-                    right_hand_index_points.push(
-                        landmark_to_vector3(
-                            msg_right_hand_landmarks[i], aspect_ratio)
-                        .sub(right_hand_root)
-                        .multiplyScalar(2.0)
-                        .add(pose_world_right_hand));
-                }
                 if (this.right_hand_index_lines === null) {
                     this.right_hand_index_lines =
                         create_line_object_from_points(
@@ -676,18 +755,6 @@ export function MediapipeHolisticResult(scene, message_div=null) {
                     update_line_object_from_points(this.right_hand_index_lines, right_hand_index_points);
                 }
 
-                let right_hand_middle_points = [];
-                let right_hand_middle_indices = [
-                    0, 9, 10, 11, 12
-                ];
-                for (const i of right_hand_middle_indices) {
-                    right_hand_middle_points.push(
-                        landmark_to_vector3(
-                            msg_right_hand_landmarks[i], aspect_ratio)
-                        .sub(right_hand_root)
-                        .multiplyScalar(2.0)
-                        .add(pose_world_right_hand));
-                }
                 if (this.right_hand_middle_lines === null) {
                     this.right_hand_middle_lines =
                         create_line_object_from_points(
@@ -697,18 +764,6 @@ export function MediapipeHolisticResult(scene, message_div=null) {
                     update_line_object_from_points(this.right_hand_middle_lines, right_hand_middle_points);
                 }
 
-                let right_hand_ring_points = [];
-                let right_hand_ring_indices = [
-                    0, 13, 14, 15, 16
-                ];
-                for (const i of right_hand_ring_indices) {
-                    right_hand_ring_points.push(
-                        landmark_to_vector3(
-                            msg_right_hand_landmarks[i], aspect_ratio)
-                        .sub(right_hand_root)
-                        .multiplyScalar(2.0)
-                        .add(pose_world_right_hand));
-                }
                 if (this.right_hand_ring_lines === null) {
                     this.right_hand_ring_lines =
                         create_line_object_from_points(
@@ -718,18 +773,6 @@ export function MediapipeHolisticResult(scene, message_div=null) {
                     update_line_object_from_points(this.right_hand_ring_lines, right_hand_ring_points);
                 }
 
-                let right_hand_pinky_points = [];
-                let right_hand_pinky_indices = [
-                    0, 17, 18, 19, 20
-                ];
-                for (const i of right_hand_pinky_indices) {
-                    right_hand_pinky_points.push(
-                        landmark_to_vector3(
-                            msg_right_hand_landmarks[i], aspect_ratio)
-                        .sub(right_hand_root)
-                        .multiplyScalar(2.0)
-                        .add(pose_world_right_hand));
-                }
                 if (this.right_hand_pinky_lines === null) {
                     this.right_hand_pinky_lines =
                         create_line_object_from_points(
@@ -738,7 +781,6 @@ export function MediapipeHolisticResult(scene, message_div=null) {
                 } else {
                     update_line_object_from_points(this.right_hand_pinky_lines, right_hand_pinky_points);
                 }
-
             } else {
                 clear_line_object(this.right_hand_thumb_lines);
                 clear_line_object(this.right_hand_index_lines);
@@ -747,25 +789,112 @@ export function MediapipeHolisticResult(scene, message_div=null) {
                 clear_line_object(this.right_hand_pinky_lines);
             }
 
-
-            if ("left_hand_landmarks" in msg) {
-                let msg_left_hand_landmarks = msg["left_hand_landmarks"];
-                let left_hand_root =
-                landmark_to_vector3(
-                    msg_left_hand_landmarks[0], aspect_ratio);
-
+            if ("left_hand_landmarks" in msg || "left_hand_world_landmarks" in msg) {
                 let left_hand_thumb_points = [];
                 let left_hand_thumb_indices = [
                     0, 1, 2, 3, 4
                 ];
-                for (const i of left_hand_thumb_indices) {
-                    left_hand_thumb_points.push(
-                        landmark_to_vector3(
-                            msg_left_hand_landmarks[i], aspect_ratio)
-                        .sub(left_hand_root)
-                        .multiplyScalar(2.0)
-                        .add(pose_world_left_hand));
+                let left_hand_index_points = [];
+                let left_hand_index_indices = [
+                    0, 5, 6, 7, 8
+                ];
+                let left_hand_middle_points = [];
+                let left_hand_middle_indices = [
+                    0, 9, 10, 11, 12
+                ];
+                let left_hand_ring_points = [];
+                let left_hand_ring_indices = [
+                    0, 13, 14, 15, 16
+                ];
+                let left_hand_pinky_points = [];
+                let left_hand_pinky_indices = [
+                    0, 17, 18, 19, 20
+                ];
+
+                if ("left_hand_world_landmarks" in msg) {
+                    let msg_left_hand_world_landmarks = msg["left_hand_world_landmarks"];
+
+                    for (const i of left_hand_thumb_indices) {
+                        left_hand_thumb_points.push(
+                            world_landmark_to_vector3(
+                                msg_left_hand_world_landmarks[i]));
+                    }
+
+                    for (const i of left_hand_index_indices) {
+                        left_hand_index_points.push(
+                            world_landmark_to_vector3(
+                                msg_left_hand_world_landmarks[i]));
+                    }
+
+                    for (const i of left_hand_middle_indices) {
+                        left_hand_middle_points.push(
+                            world_landmark_to_vector3(
+                                msg_left_hand_world_landmarks[i]));
+                    }
+
+                    for (const i of left_hand_ring_indices) {
+                        left_hand_ring_points.push(
+                            world_landmark_to_vector3(
+                                msg_left_hand_world_landmarks[i]));
+                    }
+
+                    for (const i of left_hand_pinky_indices) {
+                        left_hand_pinky_points.push(
+                            world_landmark_to_vector3(
+                                msg_left_hand_world_landmarks[i]));
+                    }
+                } else if ("left_hand_landmarks" in msg) {
+                    let msg_left_hand_landmarks = msg["left_hand_landmarks"];
+                    let left_hand_root =
+                    landmark_to_vector3(
+                        msg_left_hand_landmarks[0], aspect_ratio);
+
+                    for (const i of left_hand_thumb_indices) {
+                        left_hand_thumb_points.push(
+                            landmark_to_vector3(
+                                msg_left_hand_landmarks[i], aspect_ratio)
+                            .sub(left_hand_root)
+                            .multiplyScalar(2.0)
+                            .add(pose_world_left_hand));
+                    }
+
+                    for (const i of left_hand_index_indices) {
+                        left_hand_index_points.push(
+                            landmark_to_vector3(
+                                msg_left_hand_landmarks[i], aspect_ratio)
+                            .sub(left_hand_root)
+                            .multiplyScalar(2.0)
+                            .add(pose_world_left_hand));
+                    }
+
+                    for (const i of left_hand_middle_indices) {
+                        left_hand_middle_points.push(
+                            landmark_to_vector3(
+                                msg_left_hand_landmarks[i], aspect_ratio)
+                            .sub(left_hand_root)
+                            .multiplyScalar(2.0)
+                            .add(pose_world_left_hand));
+                    }
+
+                    for (const i of left_hand_ring_indices) {
+                        left_hand_ring_points.push(
+                            landmark_to_vector3(
+                                msg_left_hand_landmarks[i], aspect_ratio)
+                            .sub(left_hand_root)
+                            .multiplyScalar(2.0)
+                            .add(pose_world_left_hand));
+                    }
+
+                    for (const i of left_hand_pinky_indices) {
+                        left_hand_pinky_points.push(
+                            landmark_to_vector3(
+                                msg_left_hand_landmarks[i], aspect_ratio)
+                            .sub(left_hand_root)
+                            .multiplyScalar(2.0)
+                            .add(pose_world_left_hand));
+                    }
                 }
+
                 if (this.left_hand_thumb_lines === null) {
                     this.left_hand_thumb_lines =
                         create_line_object_from_points(
@@ -775,18 +904,6 @@ export function MediapipeHolisticResult(scene, message_div=null) {
                     update_line_object_from_points(this.left_hand_thumb_lines, left_hand_thumb_points);
                 }
 
-                let left_hand_index_points = [];
-                let left_hand_index_indices = [
-                    0, 5, 6, 7, 8
-                ];
-                for (const i of left_hand_index_indices) {
-                    left_hand_index_points.push(
-                        landmark_to_vector3(
-                            msg_left_hand_landmarks[i], aspect_ratio)
-                        .sub(left_hand_root)
-                        .multiplyScalar(2.0)
-                        .add(pose_world_left_hand));
-                }
                 if (this.left_hand_index_lines === null) {
                     this.left_hand_index_lines =
                         create_line_object_from_points(
@@ -796,18 +913,6 @@ export function MediapipeHolisticResult(scene, message_div=null) {
                     update_line_object_from_points(this.left_hand_index_lines, left_hand_index_points);
                 }
 
-                let left_hand_middle_points = [];
-                let left_hand_middle_indices = [
-                    0, 9, 10, 11, 12
-                ];
-                for (const i of left_hand_middle_indices) {
-                    left_hand_middle_points.push(
-                        landmark_to_vector3(
-                            msg_left_hand_landmarks[i], aspect_ratio)
-                        .sub(left_hand_root)
-                        .multiplyScalar(2.0)
-                        .add(pose_world_left_hand));
-                }
                 if (this.left_hand_middle_lines === null) {
                     this.left_hand_middle_lines =
                         create_line_object_from_points(
@@ -817,18 +922,6 @@ export function MediapipeHolisticResult(scene, message_div=null) {
                     update_line_object_from_points(this.left_hand_middle_lines, left_hand_middle_points);
                 }
 
-                let left_hand_ring_points = [];
-                let left_hand_ring_indices = [
-                    0, 13, 14, 15, 16
-                ];
-                for (const i of left_hand_ring_indices) {
-                    left_hand_ring_points.push(
-                        landmark_to_vector3(
-                            msg_left_hand_landmarks[i], aspect_ratio)
-                        .sub(left_hand_root)
-                        .multiplyScalar(2.0)
-                        .add(pose_world_left_hand));
-                }
                 if (this.left_hand_ring_lines === null) {
                     this.left_hand_ring_lines =
                         create_line_object_from_points(
@@ -838,18 +931,6 @@ export function MediapipeHolisticResult(scene, message_div=null) {
                     update_line_object_from_points(this.left_hand_ring_lines, left_hand_ring_points);
                 }
 
-                let left_hand_pinky_points = [];
-                let left_hand_pinky_indices = [
-                    0, 17, 18, 19, 20
-                ];
-                for (const i of left_hand_pinky_indices) {
-                    left_hand_pinky_points.push(
-                        landmark_to_vector3(
-                            msg_left_hand_landmarks[i], aspect_ratio)
-                        .sub(left_hand_root)
-                        .multiplyScalar(2.0)
-                        .add(pose_world_left_hand));
-                }
                 if (this.left_hand_pinky_lines === null) {
                     this.left_hand_pinky_lines =
                         create_line_object_from_points(
