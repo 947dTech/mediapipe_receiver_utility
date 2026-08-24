@@ -9,6 +9,7 @@ import {getCurrentWebviewWindow} from "@tauri-apps/api/webviewWindow";
 import {MediapipeHolisticResult} from "./viewer";
 const appWindow = getCurrentWebviewWindow()
 
+const back_button = document.getElementById("back_to_menu");
 const play_button = document.getElementById("play_anim");
 const record_button = document.getElementById("record_anim");
 const stop_button = document.getElementById("stop_anim");
@@ -74,6 +75,14 @@ record_button.addEventListener("click", (event) => {
             () => {}
         );
     }
+});
+
+// メニューに戻る、UDPの送信スレッドを止めたあとに遷移。
+back_button.addEventListener("click", (event) => {
+    playing = false;
+    emit("udp_stop", {}).then((result) => {
+        window.location.href="index.html";
+    });
 });
 
 var prev_time = 0
