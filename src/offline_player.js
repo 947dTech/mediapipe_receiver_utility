@@ -9,6 +9,7 @@ import {getCurrentWebviewWindow} from "@tauri-apps/api/webviewWindow";
 import {MediapipeHolisticResult} from "./viewer";
 const appWindow = getCurrentWebviewWindow()
 
+const back_button = document.getElementById("back_to_menu");
 const play_button = document.getElementById("play_anim");
 const pause_button = document.getElementById("pause_anim");
 const stop_button = document.getElementById("stop_anim");
@@ -126,6 +127,15 @@ stop_button.addEventListener("click", (event) => {
     playing = false;
     counter_reset = true;  // 次回のinvokeで渡すようにする。
     emit("json_stop", {}).then();
+});
+
+// メニューに戻る、UDPの送信スレッドを止めたあとに遷移。
+back_button.addEventListener("click", (event) => {
+    playing = false;
+    counter_reset = true;  // 遷移するので無意味？
+    emit("json_stop", {}).then((result) => {
+        window.location.href="index.html";
+    });
 });
 
 // Rust側からeventで1フレームごとに送られてくる。
