@@ -29,15 +29,11 @@ const unlisten_open_file = listen("open_file", event => {
             let msg_camera_params = msg["camera_params"];
             let list_camera_params = document.createElement("ul");
             message_div.appendChild(list_camera_params);
-            let item_focal_length = document.createElement("li");
-            item_focal_length.innerText = "focal_length: " + msg_camera_params["focal_length"];
-            list_camera_params.appendChild(item_focal_length);
-            let item_frame_width = document.createElement("li");
-            item_frame_width.innerText = "frame_width: " + msg_camera_params["frame_width"];
-            list_camera_params.appendChild(item_frame_width);
-            let item_frame_height = document.createElement("li");
-            item_frame_height.innerText = "frame_height: " + msg_camera_params["frame_height"];
-            list_camera_params.appendChild(item_frame_height);
+            for (const [key, value] of Object.entries(msg_camera_params)) {
+                let item_param = document.createElement("li");
+                item_param.innerText = key + ": " + value;
+                list_camera_params.appendChild(item_param);
+            }
         } else {
             let p_not_found = document.createElement("p");
             p_not_found.innerText = "not found";
