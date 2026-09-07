@@ -155,17 +155,20 @@ export function MediapipeHolisticResult(scene, message_div=null) {
                     msg_camera_params["frame_width"] /
                     msg_camera_params["frame_height"];
 
+                if ("rotation_degrees" in msg_camera_params) {
+                    let rotation_degrees = msg_camera_params["rotation_degrees"];
+                    if (rotation_degrees == 0 || rotation_degrees == 180) {
+                        aspect_ratio = 1.0 / aspect_ratio;
+                    }
+                }
+
                 if (this.message_div !== null) {
                     let list_camera_params = document.createElement("ul");
-                    let item_focal_length = document.createElement("li");
-                    item_focal_length.innerText = "focal_length: " + msg_camera_params["focal_length"];
-                    list_camera_params.appendChild(item_focal_length);
-                    let item_frame_width = document.createElement("li");
-                    item_frame_width.innerText = "frame_width: " + msg_camera_params["frame_width"];
-                    list_camera_params.appendChild(item_frame_width);
-                    let item_frame_height = document.createElement("li");
-                    item_frame_height.innerText = "frame_height: " + msg_camera_params["frame_height"];
-                    list_camera_params.appendChild(item_frame_height);
+                    for (const [key, value] of Object.entries(msg_camera_params)) {
+                        let item_param = document.createElement("li");
+                        item_param.innerText = key + ": " + value;
+                        list_camera_params.appendChild(item_param);
+                    }
                     this.message_div.appendChild(list_camera_params);
                 }
             } else {
